@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Barbería Panel - Dashboard Administrativo ✂️💈
 
-## Getting Started
+Dashboard web administrativo móvil y responsivo diseñado para gestionar las citas de la barbería en tiempo real. Este panel trabaja en conjunto con el **Barbería Bot de WhatsApp** y se conecta a la misma base de datos de Supabase.
 
-First, run the development server:
+---
 
+## Características Principales 🌟
+
+* **Estética Premium Oscura:** Diseño estilizado con temática "barbershop" (colores oscuros, dorados y grises) adaptado para dispositivos móviles (mobile-first).
+* **Gestión de Citas del Día:** Pestañas interactivas para visualizar las citas de **"Hoy"** y **"Mañana"**.
+* **Métricas Clave (KPIs):**
+  * Número de citas pendientes.
+  * Número de citas completadas.
+  * Ingresos ganados (citas completadas).
+  * Ingresos por cobrar (citas pendientes).
+* **Actualización Rápida de Estados:** Permite marcar citas como **"Completada"** o **"No asistió"** con transiciones visuales agradables y actualizaciones optimistas instantáneas.
+* **Polling en Segundo Plano:** Actualiza los datos de forma silenciosa cada 10 segundos para mantener la información al día.
+* **Seguridad y Paridad API:** Las peticiones a la base de datos se hacen a través de **API Routes de Next.js** (Route Handlers en el servidor), lo que evita exponer claves en el navegador y soluciona bloqueos de CORS o políticas de seguridad (RLS).
+* **Control de Zona Horaria:** Sincronizado bajo la zona horaria de Perú/Lima (`UTC-5`) para evitar desplazamientos de fecha.
+
+---
+
+## Tecnologías Utilizadas 🛠️
+
+* **Framework:** Next.js 14 (App Router) con TypeScript.
+* **Estilos:** Tailwind CSS y variables de diseño personalizadas.
+* **Base de Datos:** Supabase (PostgreSQL).
+* **Despliegue:** Optimizado para Netlify o Vercel.
+
+---
+
+## Configuración y Ejecución Local 🚀
+
+### 1. Requisitos Previos
+* Node.js v18 o superior instalado.
+
+### 2. Clonación e Instalación
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Entrar a la carpeta
+cd barberia-panel
+
+# Instalar dependencias
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Variables de Entorno (`.env.local`)
+Crea un archivo `.env.local` en la raíz del proyecto y define las siguientes variables:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://zkfaahoxyawrvzvszvfh.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_secret_service_role_key
+NEXT_PUBLIC_BARBER_SHOP_ID=a1b2c3d4-0000-0000-0000-000000000001
+```
+*(Nota: Usamos la clave de servicio en el servidor Next.js para poder leer y actualizar las citas sin requerir configuraciones adicionales de políticas RLS en Supabase).*
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Iniciar Servidor de Desarrollo
+```bash
+npm run dev
+```
+Abre [http://localhost:3000](http://localhost:3000) en tu navegador para ver el panel.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## Despliegue en Netlify ☁️
 
-To learn more about Next.js, take a look at the following resources:
+Para desplegar tu panel en Netlify con soporte completo para las API Routes (funciones serverless):
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Método Recomendado (Por GitHub)
+1. Sube tu código a un repositorio de GitHub (público o privado).
+2. Entra a tu consola de Netlify, haz clic en **Add new site** y conecta tu repositorio.
+3. En la configuración de construcción, Netlify detectará automáticamente que es un proyecto de Next.js.
+4. **¡Importante!** Ve a la pestaña **Environment variables** en Netlify y agrega:
+   * `NEXT_PUBLIC_SUPABASE_URL`
+   * `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   * `NEXT_PUBLIC_BARBER_SHOP_ID`
+5. Haz clic en **Deploy site**.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Método por Consola (Netlify CLI)
+1. Instala el CLI de forma global: `npm install -g netlify-cli`.
+2. Inicia sesión: `netlify login`.
+3. Compila el proyecto localmente: `npm run build`.
+4. Inicializa y vincula el sitio: `netlify init`.
+5. Despliega a producción: `netlify deploy --prod`.
