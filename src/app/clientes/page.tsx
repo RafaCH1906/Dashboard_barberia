@@ -1,41 +1,30 @@
-'use client'
+"use client";
 
-import { useEffect, useState, useCallback } from 'react'
-import Link from 'next/link'
-import type { BarberShop, Customer } from '@/lib/types'
+import { useEffect, useState, useCallback, Fragment, FormEvent } from 'react';
+import Link from 'next/link';
+import type { BarberShop, Customer } from '@/lib/types';
+import { Dialog, Transition } from '@headlessui/react';
+import { PlusIcon, XMarkIcon, CheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
+import toast, { Toaster } from 'react-hot-toast';
+import { queueMessage } from '@/lib/message';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatLastVisit(dateStr: string | null): string {
-  if (!dateStr) return 'Sin visitas registradas'
-
-  try {
-    const [y, m, d] = dateStr.split('-').map(Number)
-    const date = new Date(y, m - 1, d)
-
-    const today = new Date()
-    if (today.getFullYear() === y && today.getMonth() === m - 1 && today.getDate() === d) {
-      return 'Hoy'
-    }
-
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    if (yesterday.getFullYear() === y && yesterday.getMonth() === m - 1 && yesterday.getDate() === d) {
-      return 'Ayer'
-    }
-
-    return date.toLocaleDateString('es-PE', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-  } catch (e) {
-    return dateStr
-  }
+/* ────────────────────── Helpers ────────────────────── */
+function normalizePhone(input: string): string {
+  const digits = input.replace(/\D/g, '');
+  return digits.length === 9 ? `51${digits}` : digits;
 }
 
-// ─── Components ───────────────────────────────────────────────────────────────
+function formatLastVisit(dateStr: string | null): { label: string; color: string } {
+  if (!dateStr) return { label: 'Primera visita', color: 'text-emerald-400' };
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return { label: 'Fecha inválida', color: 'text-red-400' };
+  const distance = formatDistanceToNow(date, { locale: es, addSuffix: true });
+  return { label: `hace ${distance}`, color: 'text-gray-400' };
+}
 
+/* ────────────────────── Skeleton ────────────────────── */
 function SkeletonCustomerCard() {
   return (
     <div className="rounded-2xl border border-border bg-surface p-5 animate-pulse">
@@ -52,245 +41,202 @@ function SkeletonCustomerCard() {
         <div className="flex-1 h-9 bg-surface-hover rounded-xl" />
       </div>
     </div>
-  )
+  );
 }
 
-// ─── Customers Page ───────────────────────────────────────────────────────────
+/* ────────────────────── Modal ────────────────────── */
+function NewCustomerModal({ isOpen, onClose, onCreate }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreate: (name: string, phone: string | null, addVisit: boolean) => void;
+}) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
 
+  const handleSubmit = (e: FormEvent, addVisit: boolean) => {
+    e.preventDefault();
+    if (!name.trim()) { toast.error('El nombre es obligatorio'); return; }
+    const normalizedPhone = phone ? normalizePhone(phone) : null;
+    onCreate(name.trim(), normalizedPhone, addVisit);
+    setName('');
+    setPhone('');
+    onClose();
+  };
+
+  return (
+    <Transition appear show={isOpen} as={Fragment}>
+      <Dialog as="div" className="relative z-10" onClose={onClose}>
+        <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+          <div className="fixed inset-0 bg-black/30" />
+        </Transition.Child>
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
+                <Dialog.Title className="text-lg font-medium text-gray-100 mb-4">Registrar cliente</Dialog.Title>
+                <form className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-200 mb-1">Nombre *</label>
+                    <input type="text" className="w-full rounded-md bg-gray-700 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={name} onChange={e => setName(e.target.value)} placeholder="Juan Pérez" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-200 mb-1">Teléfono (opcional)</label>
+                    <input type="tel" className="w-full rounded-md bg-gray-700 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={phone} onChange={e => setPhone(e.target.value)} placeholder="987654321" />
+                  </div>
+                  <div className="flex justify-end space-x-2 mt-4">
+                    <button type="button" className="rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-500" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500" onClick={e => handleSubmit(e, false)}>Solo registrar</button>
+                    <button type="submit" className="flex items-center gap-1 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500" onClick={e => handleSubmit(e, true)}>
+                      <CheckIcon className="w-4 h-4" />
+                      Registrar y sumar visita
+                    </button>
+                  </div>
+                </form>
+                <button className="absolute top-3 right-3 text-gray-400 hover:text-gray-200" onClick={onClose}>
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </Dialog.Panel>
+            </Transition.Child>
+          </div>
+        </div>
+      </Dialog>
+    </Transition>
+  );
+}
+
+/* ────────────────────── Main page ────────────────────── */
 export default function ClientesPage() {
-  const [shop, setShop] = useState<BarberShop | null>(null)
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [shop, setShop] = useState<BarberShop | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchShop = useCallback(async () => {
-    try {
-      const res = await fetch('/api/shop')
-      if (res.ok) {
-        const data = await res.json()
-        setShop(data as BarberShop)
-      }
-    } catch (e) {
-      console.error('Error fetching shop:', e)
-    }
-  }, [])
+    try { const res = await fetch('/api/shop'); if (res.ok) setShop(await res.json()); }
+    catch (e) { console.error(e); }
+  }, []);
 
-  const fetchCustomers = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true)
-    try {
-      const res = await fetch('/api/customers')
-      if (res.ok) {
-        const data = await res.json()
-        setCustomers((data as Customer[]) || [])
-      }
-    } catch (e) {
-      console.error('Error fetching customers:', e)
-    } finally {
-      if (showLoading) setLoading(false)
-    }
-  }, [])
+  const fetchCustomers = useCallback(async (showLoad = true) => {
+    if (showLoad) setLoading(true);
+    try { const res = await fetch('/api/customers'); if (res.ok) setCustomers(await res.json()); }
+    catch (e) { console.error(e); }
+    finally { if (showLoad) setLoading(false); }
+  }, []);
 
-  useEffect(() => {
-    fetchShop()
-    fetchCustomers()
-  }, [fetchShop, fetchCustomers])
+  useEffect(() => { fetchShop(); fetchCustomers(); }, [fetchShop, fetchCustomers]);
 
-  // Polling every 30 seconds for background refresh
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchCustomers(false)
-    }, 30000)
-
-    return () => {
-      clearInterval(interval)
-    }
-  }, [fetchCustomers])
-
-  // Manual point addition with optimistic update
-  const handleAddPoint = async (customerId: string) => {
-    const previousCustomers = [...customers]
-
-    setCustomers((prev) =>
-      prev.map((c) => {
-        if (c.id === customerId) {
-          const newPoints = c.loyalty_points + 1
-          return { ...c, loyalty_points: newPoints }
-        }
-        return c
-      })
-    )
-
-    try {
-      const targetCustomer = previousCustomers.find((c) => c.id === customerId)
-      if (!targetCustomer) return
-
-      const res = await fetch('/api/customers', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: customerId,
-          loyalty_points: targetCustomer.loyalty_points + 1,
-        }),
-      })
-
-      if (!res.ok) {
-        setCustomers(previousCustomers)
-      }
-    } catch (e) {
-      console.error('Error updating loyalty points:', e)
-      setCustomers(previousCustomers)
-    }
-  }
-
-  // Reset points with confirmation and optimistic update
-  const handleResetPoints = async (customerId: string) => {
-    const targetCustomer = customers.find((c) => c.id === customerId)
-    if (!targetCustomer) return
-
-    const confirmReset = window.confirm(
-      `¿Confirmas que vas a canjear el premio de ${targetCustomer.name || 'este cliente'}? Sus puntos volverán a 0.`
-    )
-    if (!confirmReset) return
-
-    const previousCustomers = [...customers]
-
-    setCustomers((prev) =>
-      prev.map((c) => {
-        if (c.id === customerId) {
-          return { ...c, loyalty_points: 0 }
-        }
-        return c
-      })
-    )
-
+  // optimistic visit registration
+  const handleAddPoint = async (id: string) => {
+    const prev = [...customers];
+    const now = new Date().toISOString();
+    setCustomers(c => c.map(c => c.id === id ? { ...c, loyalty_points: (c.loyalty_points ?? 0) + 1, last_visit: now } : c));
     try {
       const res = await fetch('/api/customers', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: customerId,
-          loyalty_points: 0,
-        }),
-      })
+        body: JSON.stringify({ id, loyalty_points: prev.find(c => c.id === id)!.loyalty_points + 1, last_visit: now })
+      });
+      if (!res.ok) throw new Error('fail');
+      const customer = (await res.json()) as Customer;
+      const msg = customer.loyalty_points >= (customer.loyalty_goal || 10)
+        ? `🎉 ¡Felicitaciones ${customer.name || 'cliente'}! Has alcanzado ${customer.loyalty_points} puntos y puedes canjear tu corte gratis.`
+        : `✅ Visita registrada para ${customer.name || 'cliente'}. Ahora tienes ${customer.loyalty_points} puntos.`;
+      await queueMessage(customer.phone, msg);
+      toast.success('Visita registrada +1 punto');
+    } catch { setCustomers(prev); toast.error('Error al registrar visita'); }
+  };
 
-      if (!res.ok) {
-        setCustomers(previousCustomers)
+  const handleResetPoints = async (id: string) => {
+    const prev = [...customers];
+    setCustomers(c => c.map(c => c.id === id ? { ...c, loyalty_points: 0 } : c));
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, loyalty_points: 0 })
+      });
+      if (!res.ok) throw new Error('fail');
+      const customer = (await res.json()) as Customer;
+      const msg = `🔄 Tus puntos han sido reiniciados, ${customer.name || 'cliente'}. ¡Vuelve pronto para seguir acumulando!`;
+      await queueMessage(customer.phone, msg);
+      toast.success('Puntos reiniciados');
+    } catch { setCustomers(prev); toast.error('Error al reiniciar'); }
+  };
+
+  const createCustomer = async (name: string, phone: string | null, addVisit: boolean) => {
+    const payload: Partial<Customer> = {
+      name,
+      phone: phone || undefined,
+      loyalty_points: addVisit ? 1 : 0,
+      loyalty_goal: 10,
+      last_visit: addVisit ? new Date().toISOString() : undefined
+    };
+    const toastId = toast.loading('Creando cliente…');
+    try {
+      const res = await fetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error('fail');
+      const created = await res.json();
+      setCustomers(c => [created, ...c]);
+      toast.success('Cliente creado', { id: toastId });
+      if (addVisit && created.phone) {
+        const msg = `✅ Visita inicial registrada para ${created.name || 'cliente'}. Tienes 1 punto.`;
+        await queueMessage(created.phone, msg);
       }
-    } catch (e) {
-      console.error('Error resetting loyalty points:', e)
-      setCustomers(previousCustomers)
-    }
-  }
+    } catch { toast.error('Error al crear cliente', { id: toastId }); }
+  };
 
-  // Filter customers by name or phone
-  const filteredCustomers = customers.filter((c) => {
-    const name = c.name?.toLowerCase() || ''
-    const phone = c.phone || ''
-    const query = searchQuery.toLowerCase()
-    return name.includes(query) || phone.includes(query)
-  })
+  const filtered = customers.filter(c => {
+    const q = searchQuery.toLowerCase();
+    return c.name?.toLowerCase().includes(q) || (c.phone ?? '').includes(q);
+  });
 
-  // Count clients with free cut ready
-  const freeCutsAvailable = customers.filter(
-    (c) => c.loyalty_points >= (c.loyalty_goal || 10)
-  ).length
+  const freeCuts = customers.filter(c => c.loyalty_points >= (c.loyalty_goal || 10)).length;
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      <Toaster position="top-right" />
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto max-w-2xl px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent/10 border border-accent/20">
-                <span className="text-lg">✂️</span>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-foreground tracking-tight">
-                  {shop?.name || 'Cargando...'}
-                </h1>
-                <p className="text-xs text-muted">{shop?.address}</p>
-              </div>
+        <div className="mx-auto max-w-2xl px-4 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent/10 border border-accent/20">
+              <span className="text-lg">✂️</span>
             </div>
-
-            {/* Navigation Tabs */}
-            <div className="flex gap-1.5 p-1 rounded-xl bg-surface border border-border">
-              <Link
-                href="/dashboard"
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-light hover:text-foreground transition-all duration-200 cursor-pointer"
-              >
-                Citas
-              </Link>
-              <Link
-                href="/clientes"
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent text-background transition-all duration-200 cursor-pointer"
-              >
-                Clientes
-              </Link>
+            <div>
+              <h1 className="text-lg font-bold text-foreground">{shop?.name || 'Cargando...'}</h1>
+              <p className="text-xs text-muted">{shop?.address}</p>
             </div>
           </div>
+          <Link href="/dashboard" className="px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-light hover:text-foreground">Citas</Link>
+          <Link href="/clientes" className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent text-background">Clientes</Link>
         </div>
       </header>
-
       <main className="mx-auto max-w-2xl px-4 py-5 pb-20">
-        {/* Banner de cortes gratis */}
-        {freeCutsAvailable > 0 && (
-          <div className="mb-5 p-4 rounded-2xl border border-accent/20 bg-accent-dim flex items-center justify-between gap-3 animate-fade-in-up">
+        {freeCuts > 0 && (
+          <div className="mb-5 p-4 rounded-2xl border border-accent/20 bg-accent-dim flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🎁</span>
               <div>
                 <h3 className="text-sm font-bold text-accent">Premio de Lealtad Listo</h3>
-                <p className="text-xs text-muted-light">
-                  Hay {freeCutsAvailable} {freeCutsAvailable === 1 ? 'cliente que tiene' : 'clientes que tienen'} un corte gratis disponible.
-                </p>
+                <p className="text-xs text-muted-light">Hay {freeCuts} {freeCuts === 1 ? 'cliente' : 'clientes'} con corte gratis.</p>
               </div>
             </div>
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-accent"></span>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-accent" />
             </span>
           </div>
         )}
-
-        {/* Search and stats */}
         <div className="flex flex-col gap-3 mb-6">
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-muted pointer-events-none">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-            </span>
-            <input
-              type="text"
-              placeholder="Buscar por nombre o teléfono..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-2xl border border-border bg-surface text-foreground placeholder-muted text-sm font-medium focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all duration-200"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-muted-light hover:text-foreground cursor-pointer"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-              </button>
-            )}
+            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-muted pointer-events-none">🔍</span>
+            <input type="text" placeholder="Buscar…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-2xl border border-border bg-surface text-foreground placeholder-muted" />
           </div>
         </div>
-
-        {/* Customers list heading */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-foreground">
-            Clientes registrados ({filteredCustomers.length})
-          </h2>
-          <button
-            onClick={() => fetchCustomers()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-light hover:text-foreground bg-surface hover:bg-surface-hover border border-border transition-all duration-200 cursor-pointer"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 16h5v5" /></svg>
-            Actualizar
-          </button>
+          <h2 className="text-base font-bold">Clientes ({filtered.length})</h2>
+          <button onClick={() => fetchCustomers()} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface-hover border border-border">Actualizar</button>
         </div>
-
-        {/* Customers list */}
         <div className="space-y-3">
           {loading ? (
             <>
@@ -298,102 +244,51 @@ export default function ClientesPage() {
               <SkeletonCustomerCard />
               <SkeletonCustomerCard />
             </>
-          ) : filteredCustomers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-20 h-20 rounded-full bg-surface border border-border flex items-center justify-center mb-4">
-                <span className="text-4xl">👥</span>
-              </div>
-              <h3 className="text-lg font-semibold text-foreground mb-1">Sin clientes</h3>
-              <p className="text-sm text-muted max-w-[245px]">
-                {searchQuery
-                  ? 'No se encontraron clientes que coincidan con la búsqueda.'
-                  : 'Aún no hay clientes registrados en esta barbería.'}
-              </p>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center py-16 text-center">
+              <p>No hay clientes.</p>
+              <button onClick={() => setIsModalOpen(true)} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded">Crear cliente</button>
             </div>
           ) : (
-            filteredCustomers.map((customer, i) => {
-              const goal = customer.loyalty_goal || 10
-              const points = customer.loyalty_points || 0
-              const reachedGoal = points >= goal
-              const progressPercent = Math.min((points / goal) * 100, 100)
-
+            filtered.map(c => {
+              const goal = c.loyalty_goal || 10;
+              const pts = c.loyalty_points || 0;
+              const reached = pts >= goal;
+              const prog = Math.min((pts / goal) * 100, 100);
+              const last = formatLastVisit(c.last_visit);
               return (
-                <div
-                  key={customer.id}
-                  className={`group rounded-2xl border transition-all duration-300 p-4 sm:p-5 bg-surface hover:border-border-light animate-fade-in-up opacity-0 stagger-${Math.min(i + 1, 5)}`}
-                >
-                  <div className="flex items-start justify-between gap-3 mb-3">
+                <div key={c.id} className="rounded-2xl border p-4 bg-surface">
+                  <div className="flex justify-between">
                     <div>
-                      <h3 className="font-semibold text-base text-foreground">
-                        {customer.name || 'Cliente sin nombre'}
-                      </h3>
-                      <p className="text-xs text-muted-light mt-0.5">{customer.phone}</p>
-                      <p className="text-xs text-muted mt-2">
-                        Última visita: <span className="font-medium text-muted-light">{formatLastVisit(customer.last_visit)}</span>
-                      </p>
+                      <h3 className="font-semibold">{c.name || 'Sin nombre'}</h3>
+                      <p className="text-xs text-muted-light">{c.phone}</p>
+                      <p className="text-xs">Última visita: <span className={last.color}>{last.label}</span></p>
                     </div>
-
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className={`text-sm font-bold tracking-wider ${reachedGoal ? 'text-accent' : 'text-foreground'}`}>
-                        {points}/{goal} pts
-                      </span>
-                      {reachedGoal ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-accent-dim text-accent border border-accent/20 animate-pulse-glow">
-                          🎁 Corte Gratis
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface-hover text-muted-light border border-border">
-                          En progreso
-                        </span>
-                      )}
+                    <div className="text-right">
+                      <span className={reached ? 'text-accent' : 'text-foreground'}>{pts}/{goal} pts</span>
                     </div>
                   </div>
-
-                  {/* Progress bar */}
-                  <div className="w-full bg-border rounded-full h-2 mb-4 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ease-out ${
-                        reachedGoal
-                          ? 'bg-gradient-to-r from-accent to-accent-hover'
-                          : 'bg-accent'
-                      }`}
-                      style={{ width: `${progressPercent}%` }}
-                    />
+                  <div className="w-full bg-border rounded-full h-2 my-2">
+                    <div className={`h-full rounded-full ${reached ? 'bg-gradient-to-r from-accent to-accent-hover' : 'bg-accent'}`} style={{ width: `${prog}%` }} />
                   </div>
-
-                  {/* Actions */}
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAddPoint(customer.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-accent-dim text-accent border border-accent/20 hover:bg-accent/10 transition-all duration-200 cursor-pointer"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
-                      Sumar punto (+1)
-                    </button>
-                    {reachedGoal ? (
-                      <button
-                        onClick={() => handleResetPoints(customer.id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-accent text-background hover:bg-accent-hover transition-all duration-200 cursor-pointer"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
-                        Canjear corte
-                      </button>
+                    <button onClick={() => handleAddPoint(c.id)} className="flex-1 px-3 py-1 rounded bg-accent-dim text-accent">Visita</button>
+                    {reached ? (
+                      <button onClick={() => handleResetPoints(c.id)} className="flex-1 px-3 py-1 rounded bg-accent text-white">Canjear</button>
                     ) : (
-                      <button
-                        onClick={() => handleResetPoints(customer.id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-surface-hover text-muted-light hover:text-foreground border border-border transition-all duration-200 cursor-pointer"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M16 3h5v5" /></svg>
-                        Reiniciar puntos
-                      </button>
+                      <button onClick={() => handleResetPoints(c.id)} className="flex-1 px-3 py-1 rounded bg-surface-hover text-muted-light">Reiniciar</button>
                     )}
                   </div>
                 </div>
-              )
+              );
             })
           )}
         </div>
       </main>
+      <button onClick={() => setIsModalOpen(true)} className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-indigo-500" aria-label="Crear nuevo cliente">
+        <PlusIcon className="w-7 h-7" />
+      </button>
+      <NewCustomerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onCreate={createCustomer} />
     </div>
-  )
+  );
 }

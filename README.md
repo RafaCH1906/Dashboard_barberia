@@ -80,3 +80,15 @@ Para desplegar tu panel en Netlify con soporte completo para las API Routes (fun
 3. Compila el proyecto localmente: `npm run build`.
 4. Inicializa y vincula el sitio: `netlify init`.
 5. Despliega a producción: `netlify deploy --prod`.
+
+## Mensajería Automática 📩
+
+- **API Route**: `app/api/send-message/route.ts` permite encolar mensajes WhatsApp en la tabla `message_queue` de Supabase.
+- **Utilidad Compartida**: `src/lib/message.ts` exporta `queueMessage(phone, message, barberShopId?)` que se usa en `src/app/clientes/page.tsx` para:
+  - Enviar saludo al crear un cliente.
+  - Notificar visita inicial y puntos de fidelidad.
+  - Avisar cuando se alcanza o reinicia la meta de puntos.
+- **Variables de entorno**: `NEXT_PUBLIC_BARBER_SHOP_ID` se lee automáticamente; si no está definida, la función usará una cadena vacía.
+- **Feedback UI**: Se muestra toast de éxito/error mediante `react-hot-toast`.
+
+Esta integración permite que el panel desencadene mensajes sin exponer credenciales y que el bot los procese en segundo plano.
