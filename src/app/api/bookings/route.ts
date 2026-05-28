@@ -43,6 +43,20 @@ export async function PATCH(request: Request) {
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+    // 1. Fetch current booking details to know the customer_id and current status
+    const { data: booking, error: fetchError } = await supabase
+      .from('bookings')
+      .select('customer_id, starts_at, status')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !booking) {
+      return NextResponse.json({ error: fetchError?.message || 'Booking not found' }, { status: 404 })
+    }
+
+    const isNewlyCompleted = status === 'completed' && booking.status !== 'completed'
+
+    // 2. Update booking status
     const { data, error } = await supabase
       .from('bookings')
       .update({ status })
@@ -52,6 +66,30 @@ export async function PATCH(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // 3. If booking status is newly marked as 'completed', update customer loyalty points
+    if (isNewlyCompleted && booking.customer_id) {
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('loyalty_points')
+        .eq('id', booking.customer_id)
+        .single()
+
+      if (customer) {
+        const newPoints = (customer.loyalty_points || 0) + 1
+        const visitDate = booking.starts_at 
+          ? booking.starts_at.split('T')[0] 
+          : new Date().toISOString().split('T')[0]
+
+        await supabase
+          .from('customers')
+          .update({
+            loyalty_points: newPoints,
+            last_visit: visitDate
+          })
+          .eq('id', booking.customer_id)
+      }
     }
 
     return NextResponse.json(data)

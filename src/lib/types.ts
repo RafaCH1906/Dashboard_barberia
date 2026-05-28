@@ -19,6 +19,8 @@ export interface Customer {
   phone: string
   name: string | null
   last_visit: string | null
+  loyalty_points: number
+  loyalty_goal: number
 }
 
 export interface Booking {
